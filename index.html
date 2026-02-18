@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Talk To You - Cloud</title>
+    <style>
+        /* MANTENEMOS TODO TU DISEÑO ORIGINAL INTACTO */
+        @import url('https://fonts.googleapis.com/css2?family=Indie+Flower&family=Bungee&family=Space+Grotesk:wght@300;700&display=swap');
+        :root{--bg:#121212;--txt:#fff;--accent:#00ff88;--paper:rgba(255,255,255,0.05);}
+        body.viajero{--bg:#ff6b6b;--txt:#2d3436;--accent:#fdcb6e;background-image:url('https://www.transparenttextures.com/patterns/carbon-fibre.png');}
+        body.lectura{--bg:#f5f5dc;--txt:#4a3728;--accent:#d4a373;background-image:url('https://www.transparenttextures.com/patterns/old-mathematics.png');font-family:'Indie Flower',cursive;}
+        body.cyber{--bg:#000;--txt:#39ff14;--accent:#ff00ff;background-image:url('https://www.transparenttextures.com/patterns/asfalt-dark.png');font-family:'Space Grotesk',sans-serif;}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{background-color:var(--bg);color:var(--txt);transition:all .6s ease;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;}
+        header{padding:30px 20px}
+        h1{font-family:'Bungee',cursive;font-size:2.5rem;transform:rotate(-3deg);color:var(--accent);text-shadow:4px 4px 0 var(--txt);}
+        .profile-sticker{background:var(--txt);color:var(--bg);padding:15px;width:fit-content;margin-left:20px;transform:rotate(2deg);box-shadow:10px 10px 0 var(--accent);cursor:pointer;}
+        #muro{flex:1;padding:40px 20px;display:flex;flex-direction:column;gap:30px;overflow-y:auto;}
+        .post{background:var(--paper);border:2px dashed var(--accent);padding:20px;max-width:90%;backdrop-filter:blur(5px);animation:glitch .3s ease;}
+        .post:nth-child(even){align-self:flex-end;transform:rotate(1deg);border-style:solid;}
+        .post:nth-child(odd){transform:rotate(-1.5deg);}
+        .post b{font-size:.8rem;text-transform:uppercase;background:var(--accent);color:var(--bg);padding:2px 5px;}
+        .post p{margin-top:10px;font-size:1.1rem;word-break:break-word}
+        .post time{display:block;font-size:.7rem;opacity:.6;margin-top:8px;font-family:monospace;}
+        @keyframes glitch{0%{transform:translate(0)}20%{transform:translate(-2px,2px)}40%{transform:translate(-2px,-2px)}60%{transform:translate(2px,2px)}80%{transform:translate(2px,-2px)}100%{transform:translate(0)}}
+        .mood-dock{display:flex;gap:15px;overflow-x:auto;padding:20px;}.sticker-btn{background:var(--accent);color:var(--bg);padding:10px 20px;border:none;font-family:'Bungee';cursor:pointer;transform:skew(-10deg);box-shadow:5px 5px 0 var(--txt);}
+        .footer{padding:20px;display:flex;gap:10px;position:sticky;bottom:0;background:var(--bg);}
+        input{flex:1;background:transparent;border:3px solid var(--txt);padding:15px;color:var(--txt);font-size:1.1rem;outline:none;}
+        .btn-post{background:var(--txt);color:var(--bg);border:none;padding:0 25px;font-family:'Bungee';cursor:pointer;}
+        .toast{position:fixed;top:20px;right:20px;background:var(--accent);color:var(--bg);padding:10px 20px;font-family:'Bungee';font-size:.8rem;transform:translateX(150%);transition:.3s;box-shadow:5px 5px 0 var(--txt);z-index:999;}
+        .toast.show{transform:translateX(0)}
+    </style>
+</head>
+<body class="cyber">
+
+<div class="toast" id="toast">Cargando...</div>
+
+<header>
+    <h1>Talk To You</h1>
+    <div class="profile-sticker" onclick="changeName()">
+        <p style="font-weight:bold" id="username">@Darksoul_</p>
+        <p id="bio" style="font-size:.8rem;">Viviendo en el glitch...</p>
+    </div>
+</header>
+
+<div class="mood-dock">
+    <button class="sticker-btn" onclick="setMode('viajero','En la ruta ')">RUTA</button>
+    <button class="sticker-btn" onclick="setMode('lectura','Leyendo... shhh ')">SOFT</button>
+    <button class="sticker-btn" onclick="setMode('cyber','Modo Hacker ')">GLITCH</button>
+    <button class="sticker-btn" onclick="clearLocal()" style="background:#ff4444;color:white">RESET LOCAL</button>
+</div>
+
+<main id="muro">
+    </main>
+
+<div class="footer">
+    <input type="text" id="userInput" placeholder="Di algo real para el mundo..." maxlength="280">
+    <button class="btn-post" onclick="post()">ENVIAR</button>
+</div>
+
+<script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+    // --- REEMPLAZA ESTO CON TUS DATOS ---
+    const supabaseUrl = 'https://jrexedsdtxkoqfoqzjay.supabase.co'
+    const supabaseKey = 'sb_publishable_itxbuC3SCilrqpPxSHsPbg_Crpb6ajM'
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    // Variables de estado
+    let username = localStorage.getItem('tty_user') || 'Anonimo'
+    let bio = localStorage.getItem('tty_bio') || 'Viviendo en el glitch...'
+    let currentMode = localStorage.getItem('tty_mode') || 'cyber'
+    let cooldown = false
+
+    // Inicializar UI
+    document.getElementById('username').textContent = '@' + username
+    document.getElementById('bio').textContent = bio
+    document.body.className = currentMode
+
+    // CARGAR POSTS DESDE SUPABASE
+    async function fetchPosts() {
+        const { data, error } = await supabase
+            .from('posts')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50)
+
+        if (error) {
+            console.error('Error cargando:', error)
+        } else {
+            const muro = document.getElementById('muro')
+            muro.innerHTML = ''
+            data.forEach(p => renderPost(p.author, p.text, p.time, false))
+        }
+    }
+
+    // ENVIAR POST A SUPABASE
+    window.post = async function() {
+        if (cooldown) return
+        const i = document.getElementById('userInput')
+        const text = i.value.trim()
+        if (!text) return
+
+        cooldown = true
+        const now = new Date().toLocaleString('es-ES', { hour:'2-digit', minute:'2-digit', day:'numeric', month:'short' })
+
+        // Insertar en la nube
+        const { error } = await supabase
+            .from('posts')
+            .insert([{ author: username, text: text, time: now }])
+
+        if (error) {
+            showToast('Error al enviar')
+        } else {
+            renderPost(username, text, now, true)
+            i.value = ''
+            // Pequeña probabilidad de respuesta del sistema (Local)
+            if(Math.random() > 0.7) {
+                setTimeout(() => systemReply(text), 1000)
+            }
+        }
+        
+        setTimeout(() => cooldown = false, 2000)
+    }
+
+    async function systemReply(userInput) {
+        const replies = ["Anotado en la nube eterna.", "El glitch se expande...", "Registrado correctamente.", "Pensamiento recibido."];
+        const msg = replies[Math.floor(Math.random()*replies.length)];
+        const now = new Date().toLocaleString('es-ES', { hour:'2-digit', minute:'2-digit' });
+        
+        await supabase.from('posts').insert([{ author: 'Sistema', text: msg, time: now }])
+        renderPost('Sistema', msg, now, true)
+    }
+
+    // Funciones de utilidad (Mantenidas)
+    window.renderPost = function(author, text, time, animate) {
+        const muro = document.getElementById('muro')
+        const d = document.createElement('div')
+        d.className = 'post'
+        d.innerHTML = `<b>${author}</b><p>${escapeHtml(text)}</p><time>${time}</time>`
+        if (!animate) d.style.animation = 'none'
+        muro.insertBefore(d, muro.firstChild)
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
+    }
+
+    window.setMode = function(m, newBio) {
+        document.body.className = m
+        localStorage.setItem('tty_mode', m)
+        document.getElementById('bio').textContent = newBio
+        showToast('Modo: ' + m.toUpperCase())
+    }
+
+    window.changeName = function() {
+        const n = prompt('¿Nombre?', username)
+        if(n) {
+            username = n.substring(0,12)
+            localStorage.setItem('tty_user', username)
+            document.getElementById('username').textContent = '@' + username
+        }
+    }
+
+    window.showToast = function(msg) {
+        const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show')
+        setTimeout(() => t.classList.remove('show'), 2000)
+    }
+
+    window.clearLocal = () => { localStorage.clear(); location.reload(); }
+
+    // Cargar posts al iniciar
+    fetchPosts()
+
+    // Escuchar tecla Enter
+    document.getElementById("userInput").addEventListener("keypress", e => {
+        if (e.key === "Enter") post()
+    })
+</script>
+</body>
+</html>
